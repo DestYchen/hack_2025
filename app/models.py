@@ -10,52 +10,44 @@ from app.db import Base
 class RawComment(Base):
     __tablename__ = "raw_comments"
 
-    id_comment = Column(Integer, primary_key=True, autoincrement=True)
-    id_batch = Column(UUID(as_uuid=True), nullable=False, index=True, default=uuid.uuid4)
+    id_comment = Column(Integer, primary_key=True, autoincrement=False)
+    id_batch = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     comment = Column(String, nullable=False)
     src = Column(String, nullable=True)
     time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-    __table_args__ = (UniqueConstraint("id_batch", "id_comment", name="uq_raw_batch_comment"),)
 
 
 class CleanedComment(Base):
     __tablename__ = "cleaned_comments"
 
     id_comment = Column(Integer, primary_key=True, autoincrement=False)
-    id_batch = Column(UUID(as_uuid=True), nullable=False, index=True)
+    id_batch = Column(UUID(as_uuid=True), primary_key=True, index=True)
     comment_clean = Column(String, nullable=False)
     src = Column(String, nullable=True)
     time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-
-    __table_args__ = (UniqueConstraint("id_batch", "id_comment", name="uq_cleaned_batch_comment"),)
 
 
 class ClassifiedComment(Base):
     __tablename__ = "classified_comments"
 
     id_comment = Column(Integer, primary_key=True, autoincrement=False)
-    id_batch = Column(UUID(as_uuid=True), nullable=False, index=True)
+    id_batch = Column(UUID(as_uuid=True), primary_key=True, index=True)
     comment_clean = Column(String, nullable=False)
     src = Column(String, nullable=True)
     time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     type_comment = Column(Integer, nullable=False, default=0)
-
-    __table_args__ = (UniqueConstraint("id_batch", "id_comment", name="uq_classified_batch_comment"),)
 
 
 class ValidationComment(Base):
     __tablename__ = "validation_comments"
 
     id_comment = Column(Integer, primary_key=True, autoincrement=False)
-    id_batch = Column(UUID(as_uuid=True), nullable=False, index=True)
+    id_batch = Column(UUID(as_uuid=True), primary_key=True, index=True)
     comment_clean = Column(String, nullable=False)
     src = Column(String, nullable=True)
     time = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     type_comment = Column(Integer, nullable=False, default=0)
     validation = Column(Boolean, nullable=False, default=False)
-
-    __table_args__ = (UniqueConstraint("id_batch", "id_comment", name="uq_validation_batch_comment"),)
 
 
 class BatchSummary(Base):

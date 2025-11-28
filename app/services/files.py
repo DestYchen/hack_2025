@@ -30,30 +30,64 @@ def _parse_time(raw: Optional[str]) -> datetime:
         return datetime.now(timezone.utc)
 
 
+def _normalize_row(row: dict[str, str | None]) -> dict[str, str | None]:
+    """Lowercase and strip BOM/whitespace from keys for flexible CSV headers."""
+    normalized = {}
+    for key, value in row.items():
+        norm_key = (key or "").strip().lstrip("\ufeff").lower()
+        normalized[norm_key] = value
+    return normalized
+
+
+def _get_first(row: dict[str, str | None], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        val = row.get(key)
+        if val not in (None, ""):
+            return val
+    return None
+
+
 async def save_upload(file: UploadFile, session: AsyncSession) -> str:
     _ensure_dirs()
     payload = await file.read()
+    # Try UTF-8 first; fall back to cp1251 for common Russian datasets.
     try:
         text = payload.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise ValueError(f"CSV must be utf-8: {exc}") from exc
+    except UnicodeDecodeError:
+        try:
+            text = payload.decode("cp1251")
+        except UnicodeDecodeError as exc:
+            raise ValueError(f"CSV must be utf-8 or cp1251: {exc}") from exc
 
-    batch_id = uuid.uuid4()
-    path = os.path.join(settings.upload_dir, f"{batch_id}.csv")
+    path = os.path.join(settings.upload_dir, "latest_upload.csv")
     with open(path, "w", encoding="utf-8", newline="") as fp:
         fp.write(text)
 
     reader = csv.DictReader(io.StringIO(text))
+    batch_uuid = uuid.uuid4()
     rows = []
     for row in reader:
-        comment = row.get("comment") or row.get("comment_clean") or row.get("text")
+        nrow = _normalize_row(row)
+        if not any(val not in (None, "") for val in nrow.values()):
+            continue  # skip fully empty rows
+
+        raw_id = _get_first(nrow, ("id", "id_message", "idmessage", "id_comment", "idcomment"))
+        if raw_id is None:
+            raise ValueError("CSV must contain ID column for id_message.")
+        try:
+            id_comment = int(raw_id)
+        except ValueError as exc:
+            raise ValueError(f"ID must be integer: {raw_id}") from exc
+
+        comment = _get_first(nrow, ("comment", "comment_clean", "text"))
         if not comment:
             continue
-        src = row.get("src")
-        time_val = _parse_time(row.get("time"))
+        src = _get_first(nrow, ("src",))
+        time_val = _parse_time(_get_first(nrow, ("time",)))
         rows.append(
             models.RawComment(
-                id_batch=batch_id,
+                id_comment=id_comment,
+                id_batch=batch_uuid,
                 comment=comment,
                 src=src,
                 time=time_val,
@@ -65,7 +99,7 @@ async def save_upload(file: UploadFile, session: AsyncSession) -> str:
 
     session.add_all(rows)
     await session.commit()
-    return str(batch_id)
+    return str(batch_uuid)
 
 
 async def export_final(batch_id: uuid.UUID, session: AsyncSession) -> bytes | None:
@@ -77,7 +111,7 @@ async def export_final(batch_id: uuid.UUID, session: AsyncSession) -> bytes | No
         return None
 
     buf = io.StringIO()
-    writer = csv.writer(buf)
+    writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(["id_comment", "id_batch", "comment_clean", "src", "time", "type_comment"])
     for item in records:
         writer.writerow(
@@ -90,4 +124,5 @@ async def export_final(batch_id: uuid.UUID, session: AsyncSession) -> bytes | No
                 item.type_comment,
             ]
         )
-    return buf.getvalue().encode("utf-8")
+    # Prepend BOM so Excel on Windows opens UTF-8 correctly.
+    return ("\ufeff" + buf.getvalue()).encode("utf-8-sig")

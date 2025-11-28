@@ -1,3 +1,4 @@
+import random
 import uuid
 from datetime import datetime, timezone
 
@@ -43,22 +44,23 @@ async def run_model(session: AsyncSession, batch_id: uuid.UUID) -> None:
             comment_clean=row.comment_clean,
             src=row.src,
             time=row.time,
-            type_comment=0,
+            type_comment=random.randint(0, 2),
         )
         for row in cleaned_rows
     ]
-    validation = [
-        models.ValidationComment(
-            id_comment=row.id_comment,
-            id_batch=batch_id,
-            comment_clean=row.comment_clean,
-            src=row.src,
-            time=row.time,
-            type_comment=0,
-            validation=False,
+    validation = []
+    for item in classified:
+        validation.append(
+            models.ValidationComment(
+                id_comment=item.id_comment,
+                id_batch=batch_id,
+                comment_clean=item.comment_clean,
+                src=item.src,
+                time=item.time,
+                type_comment=item.type_comment,
+                validation=False,
+            )
         )
-        for row in cleaned_rows
-    ]
 
     session.add_all(classified + validation)
 

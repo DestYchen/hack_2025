@@ -15,10 +15,18 @@ router = APIRouter()
 @router.post("/upload_csv", response_model=schemas.UploadResponse, responses={400: {"model": schemas.ErrorResponse}})
 async def upload_csv(file: UploadFile = File(...), session: AsyncSession = Depends(get_session)):
     try:
-        file_id = await files.save_upload(file, session)
+        batch_id = await files.save_upload(file, session)
+        # Auto-run the pipeline so the batch is ready for export immediately.
+        batch_uuid = uuid.UUID(batch_id)
+        await pipeline.process_batch(session, batch_uuid)
+        await pipeline.run_model(session, batch_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"status": "success", "file_id": file_id, "message": "CSV file uploaded successfully."}
+    return {
+        "status": "success",
+        "file_id": batch_id,
+        "message": "CSV file uploaded successfully.",
+    }
 
 
 @router.get("/records", response_model=schemas.RecordsResponse)

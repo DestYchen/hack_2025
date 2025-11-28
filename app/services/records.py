@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import models, schemas
@@ -19,8 +19,16 @@ async def list_records(session: AsyncSession) -> list[models.RawComment]:
 
 
 async def create_record(session: AsyncSession, payload: schemas.RecordCreate) -> models.RawComment:
+    batch_id = payload.id_batch or uuid.uuid4()
+    # Find next available id_comment within this batch (sequential).
+    result = await session.execute(
+        select(func.max(models.RawComment.id_comment)).where(models.RawComment.id_batch == batch_id)
+    )
+    next_id = (result.scalar() or 0) + 1
+
     record = models.RawComment(
-        id_batch=payload.id_batch or uuid.uuid4(),
+        id_comment=next_id,
+        id_batch=batch_id,
         comment=payload.comment,
         src=payload.src,
         time=_resolve_time(payload.time),

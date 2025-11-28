@@ -1,0 +1,11 @@
+# Python cache / venv
+__pycache__/
+.venv/
+
+# Local app storage
+storage/uploads/
+storage/outputs/
+
+# CSV datasets (large)
+*.csv
+ТОНАЛЬНОСТЬ/

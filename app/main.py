@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import router as api_router
 from app.config import get_settings
+from app.db import Base, engine
 
 settings = get_settings()
 app = FastAPI(title="Comments Pipeline API")
@@ -31,6 +32,9 @@ async def unhandled_exception_handler(_: Request, exc: Exception):
 
 @app.on_event("startup")
 async def startup_event():
+    # Ensure DB schema exists and file storage directories are present.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     from app.services.files import _ensure_dirs
 
     _ensure_dirs()
