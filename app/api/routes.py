@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import schemas
+from app import models, schemas
 from app.db import get_session
-from app.services import files, pipeline, records
+from app.services import evaluation, files, pipeline, records
 
 router = APIRouter()
 
@@ -83,3 +83,28 @@ async def export_csv(file_id: str, session: AsyncSession = Depends(get_session))
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename=\"{batch_uuid}.csv\"'},
     )
+
+
+@router.post("/upload_labels", response_model=schemas.MetricsResponse, responses={400: {"model": schemas.ErrorResponse}})
+async def upload_labels(file_id: str, file: UploadFile = File(...), session: AsyncSession = Depends(get_session)):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    try:
+        score = await evaluation.evaluate_labels(session, batch_uuid, file)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"status": "success", "file_id": str(batch_uuid), "f1_metric": score, "message": "Labels evaluated."}
+
+
+@router.get("/batch_summary", response_model=schemas.BatchSummaryResponse, responses={404: {"model": schemas.ErrorResponse}})
+async def get_batch_summary(file_id: str, session: AsyncSession = Depends(get_session)):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    summary = await session.get(models.BatchSummary, batch_uuid)
+    if not summary:
+        raise HTTPException(status_code=404, detail="Batch summary not found.")
+    return {"status": "success", "summary": summary}

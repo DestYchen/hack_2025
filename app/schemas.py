@@ -49,3 +49,22 @@ class ErrorResponse(BaseModel):
 
 class BatchActionRequest(BaseModel):
     file_id: UUID
+
+
+class MetricsResponse(BaseModel):
+    status: Literal["success"]
+    file_id: str
+    f1_metric: float
+    message: str
+
+
+class BatchSummaryRead(BaseModel):
+    id_batch: UUID
+    time: datetime | None = None
+    f1_metric: float
+    model_config = ConfigDict(from_attributes=True)
+
+
+class BatchSummaryResponse(BaseModel):
+    status: Literal["success"]
+    summary: BatchSummaryRead
