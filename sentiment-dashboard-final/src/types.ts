@@ -44,6 +44,8 @@ export interface UploadResponse {
   status: "success" | "error";
   message: string;
   invalidRows?: number[];
+  file_id?: string;
+  fileId?: string;
 }
 
 export interface PatchScoreBody {
@@ -51,6 +53,27 @@ export interface PatchScoreBody {
 }
 
 export interface PatchScoreResponse {
+  status: "success" | "error";
+  message: string;
+}
+
+// Backend responses
+export interface ClassifiedApiItem {
+  id_comment: number;
+  id_batch: string;
+  comment_clean: string;
+  src?: string | null;
+  time?: string | null;
+  type_comment: number;
+}
+
+export interface ClassifiedListApiResponse {
+  status: "success" | "error";
+  items?: ClassifiedApiItem[];
+  message?: string;
+}
+
+export interface UpdateClassifiedResponse {
   status: "success" | "error";
   message: string;
 }

@@ -3,42 +3,20 @@ import {
   DashboardFilter,
   Comment,
   UploadResponse,
-  PatchScoreResponse,
   SentimentScore,
+  ClassifiedApiItem,
+  ClassifiedListApiResponse,
+  UpdateClassifiedResponse,
 } from "../types";
 
-// Простые моки, чтобы проект работал без реального бэкенда
+const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
-const mockComments: Comment[] = [
-  {
-    id: "1",
-    text: "Это отличный продукт, пользуюсь каждый день!",
-    score: "positive",
-    createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "2",
-    text: "Нормально, но есть, что улучшить.",
-    score: "neutral",
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: "3",
-    text: "Совсем не понравилось, деньги на ветер.",
-    score: "negative",
-    createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
-export async function fetchDashboard(
-  filter: DashboardFilter
-): Promise<DashboardChart[]> {
+// Mock charts remain for now; there is no backend source for them yet.
+export async function fetchDashboard(filter: DashboardFilter): Promise<DashboardChart[]> {
   const from = new Date(filter.dateRange.from);
   const to = new Date(filter.dateRange.to);
 
   const points: DashboardChart["data"] = [];
-
-  // шаг зависит от грануляции
   const dayMs = 24 * 60 * 60 * 1000;
   let stepMs = dayMs;
   let format: (d: Date) => string = (d) => d.toISOString().slice(0, 10);
@@ -47,11 +25,8 @@ export async function fetchDashboard(
     stepMs = 7 * dayMs;
     format = (d) => {
       const year = d.getUTCFullYear();
-      // простой номер недели
       const oneJan = new Date(Date.UTC(year, 0, 1));
-      const week = Math.ceil(
-        ((+d - +oneJan) / dayMs + oneJan.getUTCDay() + 1) / 7
-      );
+      const week = Math.ceil(((+d - +oneJan) / dayMs + oneJan.getUTCDay() + 1) / 7);
       return `${year}-W${String(week).padStart(2, "0")}`;
     };
   } else if (filter.granularity === "month") {
@@ -67,7 +42,6 @@ export async function fetchDashboard(
     });
   }
 
-  // одна линейная метрика: количество отзывов
   const reviewChart: DashboardChart = {
     metric: "review_count",
     chartType: "line",
@@ -75,7 +49,6 @@ export async function fetchDashboard(
     data: points,
   };
 
-  // доля нейтральных / позитивных / негативных за период
   const negative = 20 + Math.random() * 20;
   const neutral = 20 + Math.random() * 30;
   const positive = 100 - negative - neutral;
@@ -96,37 +69,83 @@ export async function fetchDashboard(
   });
 }
 
-export async function fetchComments(): Promise<Comment[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve([...mockComments]), 300);
-  });
+function typeToScore(type: number): SentimentScore {
+  if (type === 2) return "positive";
+  if (type === 1) return "neutral";
+  return "negative";
 }
 
-export async function uploadCsv(_file: File): Promise<UploadResponse> {
-  // всегда success в мок-версии
-  return new Promise((resolve) => {
-    setTimeout(
-      () =>
-        resolve({
-          status: "success",
-          message: "Файл принят и отправлен на обработку (mock).",
-        }),
-      500
-    );
-  });
+function scoreToType(score: SentimentScore): number {
+  if (score === "positive") return 2;
+  if (score === "neutral") return 1;
+  return 0;
 }
 
-export async function downloadCsv(): Promise<void> {
-  // создаём простой CSV на лету
-  const header = "id,text,score\n";
-  const lines = mockComments
-    .map((c) => `${c.id},"${c.text.replace(/"/g, '""')}",${c.score}`)
-    .join("\n");
-  const blob = new Blob([header + lines], { type: "text/csv;charset=utf-8;" });
+async function handleJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  let data: any;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(`Invalid JSON response (${res.status})`);
+  }
+  if (!res.ok) {
+    const msg = data?.message || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data as T;
+}
+
+export async function uploadCsv(file: File): Promise<UploadResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/upload_csv`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await handleJson<UploadResponse>(res);
+  if (data.status === "success" && !data.fileId && (data as any).file_id) {
+    data.fileId = (data as any).file_id;
+  }
+  return data;
+}
+
+export async function fetchClassified(fileId: string, limit = 50): Promise<Comment[]> {
+  if (!fileId) throw new Error("file_id is required.");
+  const res = await fetch(`${API_BASE}/classified?file_id=${encodeURIComponent(fileId)}&limit=${limit}`);
+  const data = await handleJson<ClassifiedListApiResponse>(res);
+  if (data.status !== "success" || !data.items) {
+    throw new Error(data.message || "Failed to fetch comments.");
+  }
+  return data.items.map((item: ClassifiedApiItem) => ({
+    id: String(item.id_comment),
+    text: item.comment_clean,
+    score: typeToScore(item.type_comment),
+    createdAt: item.time || undefined,
+  }));
+}
+
+export async function downloadCsv(fileId: string): Promise<void> {
+  if (!fileId) throw new Error("file_id is required.");
+  const res = await fetch(`${API_BASE}/export_csv?file_id=${encodeURIComponent(fileId)}`, {
+    method: "GET",
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let msg = `HTTP ${res.status}`;
+    try {
+      const parsed = JSON.parse(text);
+      msg = parsed?.message || msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "sentiment_export_mock.csv";
+  a.download = `${fileId}.csv`;
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -134,21 +153,21 @@ export async function downloadCsv(): Promise<void> {
 }
 
 export async function patchCommentScore(
+  fileId: string,
   id: string,
   score: SentimentScore
-): Promise<PatchScoreResponse> {
-  const idx = mockComments.findIndex((c) => c.id === id);
-  if (idx !== -1) {
-    mockComments[idx].score = score;
-  }
-  return new Promise((resolve) => {
-    setTimeout(
-      () =>
-        resolve({
-          status: "success",
-          message: "Оценка обновлена (mock).",
-        }),
-      200
-    );
+): Promise<UpdateClassifiedResponse> {
+  if (!fileId) throw new Error("file_id is required.");
+  const payload = {
+    file_id: fileId,
+    id_comment: Number(id),
+    type_comment: scoreToType(score),
+  };
+  const res = await fetch(`${API_BASE}/classified`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
+  const data = await handleJson<UpdateClassifiedResponse>(res);
+  return data;
 }

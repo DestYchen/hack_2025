@@ -8,7 +8,7 @@ import {
 } from "../types";
 import {
   fetchDashboard,
-  fetchComments,
+  fetchClassified,
   uploadCsv,
   downloadCsv,
   patchCommentScore,
@@ -40,6 +40,7 @@ const DashboardPage: React.FC = () => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
 
   const [pendingScores, setPendingScores] = useState<
     Record<string, SentimentScore>
@@ -54,17 +55,23 @@ const DashboardPage: React.FC = () => {
   }, [filter]);
 
   useEffect(() => {
+    if (!activeBatchId) return;
+    setComments([]);
     (async () => {
-      const data = await fetchComments();
-      const sorted = [...data].sort((a, b) => {
-        if (a.createdAt && b.createdAt) {
-          return b.createdAt.localeCompare(a.createdAt);
-        }
-        return 0;
-      });
-      setComments(sorted);
+      try {
+        const data = await fetchClassified(activeBatchId, 50);
+        const sorted = [...data].sort((a, b) => {
+          if (a.createdAt && b.createdAt) {
+            return b.createdAt.localeCompare(a.createdAt);
+          }
+          return 0;
+        });
+        setComments(sorted);
+      } catch (e: any) {
+        setUploadMessage(e?.message || "Failed to load comments.");
+      }
     })();
-  }, []);
+  }, [activeBatchId]);
 
   const reviewChart = useMemo(
     () => charts.find((c) => c.metric === "review_count"),
@@ -82,7 +89,7 @@ const DashboardPage: React.FC = () => {
   const kpiStats: KpiStats | null = useMemo(() => {
     if (!reviewChart || !reviewChart.data.length) return null;
     const total = reviewChart.data.reduce((acc, p) => acc + p.value, 0);
-    const previousTotalRaw = total * (0.7 + Math.random() * 0.4); // псевдо-предыдущий период
+    const previousTotalRaw = total * (0.7 + Math.random() * 0.4); // mock previous period value
     const previousTotal = Math.max(1, Math.round(previousTotalRaw));
     const deltaPercent = ((total - previousTotal) / previousTotal) * 100;
     return {
@@ -111,17 +118,21 @@ const DashboardPage: React.FC = () => {
     setUploadMessage(null);
     try {
       const res = await uploadCsv(file);
-      if (res.status === "success") {
-        setUploadMessage(res.message);
-      } else {
+      if (res.status !== "success") {
         const invalid =
           res.invalidRows && res.invalidRows.length
-            ? ` Неверные строки: ${res.invalidRows.join(", ")}.`
+            ? ` Invalid rows: ${res.invalidRows.join(", ")}.`
             : "";
-        setUploadMessage(`Ошибка загрузки: ${res.message}.${invalid}`);
+        throw new Error(`${res.message || "Upload error."}${invalid}`);
       }
+      const batchId = res.fileId || (res as any).file_id;
+      if (!batchId) {
+        throw new Error("file_id not returned by server.");
+      }
+      setActiveBatchId(batchId);
+      setUploadMessage(res.message || "File uploaded and processed.");
     } catch (e) {
-      setUploadMessage("Сетевая ошибка при загрузке файла.");
+      setUploadMessage((e as any)?.message || "Failed to upload file.");
     } finally {
       setIsUploading(false);
     }
@@ -129,9 +140,13 @@ const DashboardPage: React.FC = () => {
 
   const handleDownload = async () => {
     try {
-      await downloadCsv();
+      if (!activeBatchId) {
+        alert("Upload CSV first to get file_id.");
+        return;
+      }
+      await downloadCsv(activeBatchId);
     } catch (e) {
-      alert("Не удалось скачать CSV.");
+      alert((e as any)?.message || "Failed to download CSV.");
     }
   };
 
@@ -145,9 +160,12 @@ const DashboardPage: React.FC = () => {
   const handleApplyScores = async () => {
     const entries = Object.entries(pendingScores);
     if (!entries.length) return;
+    if (!activeBatchId) {
+      alert('Upload CSV first to set file_id.');
+      return;
+    }
     setIsSavingScores(true);
 
-    // Оптимистично обновляем локальное состояние комментариев
     setComments((prev) =>
       prev.map((c) => {
         const overridden = pendingScores[c.id];
@@ -157,11 +175,11 @@ const DashboardPage: React.FC = () => {
 
     try {
       await Promise.all(
-        entries.map(([id, score]) => patchCommentScore(id, score))
+        entries.map(([id, score]) => patchCommentScore(activeBatchId, id, score))
       );
       setPendingScores({});
     } catch (e) {
-      alert("Не удалось сохранить некоторые изменения (mock).");
+      alert((e as any)?.message || 'Failed to save labels.');
     } finally {
       setIsSavingScores(false);
     }
@@ -173,40 +191,40 @@ const DashboardPage: React.FC = () => {
         <div>
           <h1 className="dashboard__title">Sentiment Dashboard</h1>
           <p className="dashboard__subtitle">
-            Классификация отзывов по трем категориям: negative / neutral / positive
+            Assign sentiment to comments: negative / neutral / positive
           </p>
         </div>
         <button
           className="btn btn--secondary"
           onClick={() => setIsCommentsOpen((prev) => !prev)}
         >
-          {isCommentsOpen ? "Скрыть ленту" : "Показать ленту"}
+          {isCommentsOpen ? "Hide comments" : "Show comments"}
         </button>
       </header>
 
       <section className="dashboard__filters">
         <div className="filter-group">
-          <span className="filter-label">Грануляция:</span>
+          <span className="filter-label">Granularity:</span>
           {(["day", "week", "month"] as Granularity[]).map((g) => (
             <button
               key={g}
               className={`chip ${filter.granularity === g ? "chip--active" : ""}`}
               onClick={() => handleGranularityChange(g)}
             >
-              {g === "day" && "День"}
-              {g === "week" && "Неделя"}
-              {g === "month" && "Месяц"}
+              {g === "day" && "Day"}
+              {g === "week" && "Week"}
+              {g === "month" && "Month"}
             </button>
           ))}
         </div>
         <div className="filter-group">
-          <span className="filter-label">Период:</span>
+          <span className="filter-label">Period:</span>
           <input
             type="date"
             value={filter.dateRange.from}
             onChange={(e) => handleDateChange("from", e.target.value)}
           />
-          <span className="filter-separator">—</span>
+          <span className="filter-separator">to</span>
           <input
             type="date"
             value={filter.dateRange.to}
@@ -228,11 +246,11 @@ const DashboardPage: React.FC = () => {
         <div className="dashboard__charts-panel">
           {kpiStats && (
             <section className="kpi-card">
-              <div className="kpi-card__label">Всего отзывов за период</div>
+              <div className="kpi-card__label">Total comments</div>
               <div className="kpi-card__value">{kpiStats.total}</div>
               <div className="kpi-card__delta">
                 {kpiStats.deltaPercent >= 0 ? "+" : ""}
-                {kpiStats.deltaPercent.toFixed(1)}% к предыдущему периоду
+                {kpiStats.deltaPercent.toFixed(1)}% vs previous period
               </div>
             </section>
           )}
@@ -248,7 +266,7 @@ const DashboardPage: React.FC = () => {
           )}
         </div>
         <button className="btn" onClick={handleDownload}>
-          Скачать обработанный CSV
+          Download classified CSV
         </button>
       </footer>
     </div>
@@ -274,7 +292,7 @@ const FileUploadButton: React.FC<FileUploadButtonProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.name.toLowerCase().endsWith(".csv")) {
-        alert("Пожалуйста, выберите CSV-файл.");
+        alert("Please choose a CSV file.");
         return;
       }
       onUpload(file);
@@ -289,7 +307,7 @@ const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         onClick={handleClick}
         disabled={disabled}
       >
-        {disabled ? "Загружаем..." : "Загрузить CSV"}
+        {disabled ? "Uploading..." : "Upload CSV"}
       </button>
       <input
         ref={inputRef}

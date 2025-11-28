@@ -29,7 +29,7 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
   return (
     <aside className={`comment-feed ${isOpen ? "comment-feed--open" : ""}`}>
       <div className="comment-feed__header">
-        <h3>Комментарии</h3>
+        <h3>Comments</h3>
         <span className="comment-feed__count">{comments.length}</span>
       </div>
 
@@ -80,12 +80,12 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
                   </div>
                   {dateTime && (
                     <div className="comment-item__row">
-                      <span className="comment-item__label">Создано:</span>
+                      <span className="comment-item__label">Created at:</span>
                       <span className="comment-item__value">{dateTime}</span>
                     </div>
                   )}
                   <div className="comment-item__row">
-                    <span className="comment-item__label">Оценка:</span>
+                    <span className="comment-item__label">Label:</span>
                     <div className="comment-item__score-select">
                       {(["negative", "neutral", "positive"] as SentimentScore[]).map(
                         (score) => (
@@ -118,11 +118,11 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
           onClick={onApplyChanges}
           disabled={!hasPending || isSaving}
         >
-          {isSaving ? "Сохраняем..." : "Применить изменения"}
+          {isSaving ? "Saving..." : "Apply changes"}
         </button>
         <textarea
           className="comment-feed__input"
-          placeholder="Введите текст комментария..."
+          placeholder="Leave a note..."
           rows={3}
         />
       </div>

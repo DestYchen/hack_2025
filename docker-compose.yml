@@ -32,5 +32,14 @@ services:
       - ./storage/uploads:/app/storage/uploads
       - ./storage/outputs:/app/storage/outputs
 
+  frontend:
+    build:
+      context: ./sentiment-dashboard-final
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+
 volumes:
   pgdata:
