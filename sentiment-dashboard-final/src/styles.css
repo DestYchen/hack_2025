@@ -1,0 +1,121 @@
+:root {
+  /* Палитра, вдохновлённая скриншотом */
+  --color-bg: #05040a;
+  --color-bg-gradient-start: #3b0764;
+  --color-bg-gradient-end: #020617;
+
+  --color-surface: #181821;
+  --color-surface-soft: #101019;
+
+  --color-accent: #d7ff3f;
+  --color-accent-soft: #b5ff5f;
+  --color-accent-purple: #8b5cf6;
+
+  /* Цвета тональностей (оставляем зелёный/серый/красный) */
+  --color-positive: #4ade80;
+  --color-positive-soft: #a7f3d0;
+
+  --color-neutral: #9ca3af;
+  --color-neutral-soft: #e5e7eb;
+
+  --color-negative: #ff4c5b;
+  --color-negative-soft: #fecaca;
+
+  --color-text-primary: #f9fafb;
+  --color-text-muted: #9ca3af;
+
+  --border-radius-lg: 18px;
+  --transition-fast: 0.2s ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+    "Roboto", sans-serif;
+  background: radial-gradient(
+    circle at 0% 0%,
+    var(--color-bg-gradient-start),
+    var(--color-bg-gradient-end) 45%,
+    #000000 100%
+  );
+  color: var(--color-text-primary);
+}
+
+button {
+  font-family: inherit;
+}
+
+.btn {
+  border-radius: 999px;
+  padding: 0.7rem 1.4rem;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  background: linear-gradient(
+    135deg,
+    var(--color-accent),
+    var(--color-accent-soft)
+  );
+  color: #111827;
+  transition: transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background var(--transition-fast),
+    opacity var(--transition-fast);
+  font-size: 0.9rem;
+}
+
+.btn--secondary {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--color-text-primary);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.7);
+}
+
+.score-pill {
+  width: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.score-pill--positive {
+  background: linear-gradient(
+    135deg,
+    var(--color-positive),
+    var(--color-positive-soft)
+  );
+}
+.score-pill--neutral {
+  background: linear-gradient(
+    135deg,
+    var(--color-neutral),
+    var(--color-neutral-soft)
+  );
+}
+.score-pill--negative {
+  background: linear-gradient(
+    135deg,
+    var(--color-negative),
+    var(--color-negative-soft)
+  );
+}
+
+@import "./landing.css";
+@import "./dashboard.css";
+@import "./comment-feed.css";
+@import "./chart-grid.css";
