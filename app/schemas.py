@@ -68,3 +68,29 @@ class BatchSummaryRead(BaseModel):
 class BatchSummaryResponse(BaseModel):
     status: Literal["success"]
     summary: BatchSummaryRead
+
+
+class ClassifiedRead(BaseModel):
+    id_comment: int
+    id_batch: UUID
+    comment_clean: str
+    src: str | None = None
+    time: datetime | None = None
+    type_comment: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ClassifiedListResponse(BaseModel):
+    status: Literal["success"]
+    items: List[ClassifiedRead]
+
+
+class ClassifiedUpdateRequest(BaseModel):
+    file_id: UUID
+    id_comment: int
+    type_comment: int
+
+
+class ClassifiedResponse(BaseModel):
+    status: Literal["success"]
+    item: ClassifiedRead

@@ -3,6 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import models, schemas
@@ -108,3 +109,63 @@ async def get_batch_summary(file_id: str, session: AsyncSession = Depends(get_se
     if not summary:
         raise HTTPException(status_code=404, detail="Batch summary not found.")
     return {"status": "success", "summary": summary}
+
+
+@router.get(
+    "/classified",
+    response_model=schemas.ClassifiedListResponse,
+    responses={404: {"model": schemas.ErrorResponse}},
+)
+async def get_classified_comments(
+    file_id: str,
+    limit: int = 10,
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    if limit <= 0:
+        raise HTTPException(status_code=400, detail="limit must be positive.")
+    result = await session.execute(
+        select(models.ClassifiedComment)
+        .where(models.ClassifiedComment.id_batch == batch_uuid)
+        .order_by(models.ClassifiedComment.id_comment)
+        .limit(limit)
+    )
+    items = result.scalars().all()
+    if not items:
+        raise HTTPException(status_code=404, detail="No classified comments found for this batch.")
+    return {"status": "success", "items": items}
+
+
+@router.put(
+    "/classified",
+    response_model=schemas.ClassifiedResponse,
+    responses={404: {"model": schemas.ErrorResponse}},
+)
+async def update_classified_comment(
+    payload: schemas.ClassifiedUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    batch_uuid = payload.file_id
+    result = await session.execute(
+        select(models.ClassifiedComment).where(
+            models.ClassifiedComment.id_batch == batch_uuid,
+            models.ClassifiedComment.id_comment == payload.id_comment,
+        )
+    )
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Classified comment not found for this batch/id_comment.")
+
+    item.type_comment = payload.type_comment
+
+    # Keep validation table in sync if entry exists
+    val = await session.get(models.ValidationComment, (payload.id_comment, batch_uuid))
+    if val:
+        val.type_comment = payload.type_comment
+
+    await session.commit()
+    await session.refresh(item)
+    return {"status": "success", "item": item}
