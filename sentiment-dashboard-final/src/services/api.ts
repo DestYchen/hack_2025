@@ -7,6 +7,8 @@ import {
   ClassifiedApiItem,
   ClassifiedListApiResponse,
   UpdateClassifiedResponse,
+  UploadLabelsResponse,
+  BatchSummaryResponse,
 } from "../types";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
@@ -170,4 +172,26 @@ export async function patchCommentScore(
   });
   const data = await handleJson<UpdateClassifiedResponse>(res);
   return data;
+}
+
+export async function uploadLabels(fileId: string, file: File): Promise<UploadLabelsResponse> {
+  if (!fileId) throw new Error("file_id is required.");
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/upload_labels?file_id=${encodeURIComponent(fileId)}`, {
+    method: "POST",
+    body: form,
+  });
+  const data = await handleJson<UploadLabelsResponse>(res);
+  return data;
+}
+
+export async function fetchBatchSummary(fileId: string): Promise<number | null> {
+  if (!fileId) throw new Error("file_id is required.");
+  const res = await fetch(`${API_BASE}/batch_summary?file_id=${encodeURIComponent(fileId)}`);
+  const data = await handleJson<BatchSummaryResponse>(res);
+  if (data.status !== "success" || !data.summary) {
+    throw new Error(data.message || "Failed to load batch summary.");
+  }
+  return typeof data.summary.f1_metric === "number" ? data.summary.f1_metric : null;
 }

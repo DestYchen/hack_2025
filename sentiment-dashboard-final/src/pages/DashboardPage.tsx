@@ -12,6 +12,8 @@ import {
   uploadCsv,
   downloadCsv,
   patchCommentScore,
+  uploadLabels,
+  fetchBatchSummary,
 } from "../services/api";
 import { ChartGrid } from "../components/ChartGrid";
 import { CommentFeed } from "../components/CommentFeed";
@@ -41,6 +43,9 @@ const DashboardPage: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [f1Metric, setF1Metric] = useState<number | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   const [pendingScores, setPendingScores] = useState<
     Record<string, SentimentScore>
@@ -53,6 +58,18 @@ const DashboardPage: React.FC = () => {
       setCharts(data);
     })();
   }, [filter]);
+
+  useEffect(() => {
+    if (!activeBatchId) return;
+    (async () => {
+      try {
+        const val = await fetchBatchSummary(activeBatchId);
+        if (val !== null) setF1Metric(val);
+      } catch (e) {
+        /* ignore */
+      }
+    })();
+  }, [activeBatchId]);
 
   useEffect(() => {
     if (!activeBatchId) return;
@@ -85,6 +102,17 @@ const DashboardPage: React.FC = () => {
       ),
     [charts]
   );
+
+  const filteredComments = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return comments;
+    return comments.filter((c) => c.text.toLowerCase().includes(q));
+  }, [comments, searchQuery]);
+
+  const f1Display = useMemo(() => {
+    if (f1Metric === null) return "??? ??????? F1";
+    return `F1 (macro): ${f1Metric.toFixed(3)}`;
+  }, [f1Metric]);
 
   const kpiStats: KpiStats | null = useMemo(() => {
     if (!reviewChart || !reviewChart.data.length) return null;
@@ -131,6 +159,8 @@ const DashboardPage: React.FC = () => {
       }
       setActiveBatchId(batchId);
       setUploadMessage(res.message || "File uploaded and processed.");
+      setF1Metric(null);
+      setValidationMessage(null);
     } catch (e) {
       setUploadMessage((e as any)?.message || "Failed to upload file.");
     } finally {
@@ -150,6 +180,24 @@ const DashboardPage: React.FC = () => {
     }
   };
 
+  const handleUploadValidation = async (file: File) => {
+    if (!activeBatchId) {
+      alert("Upload CSV first to get file_id.");
+      return;
+    }
+    setValidationMessage(null);
+    try {
+      const res = await uploadLabels(activeBatchId, file);
+      if (res.status !== "success" || typeof res.f1_metric !== "number") {
+        throw new Error(res.message || "Failed to evaluate labels.");
+      }
+      setF1Metric(res.f1_metric);
+      setValidationMessage(`F1 (macro): ${res.f1_metric.toFixed(3)}`);
+    } catch (e) {
+      setValidationMessage((e as any)?.message || "Failed to upload validation CSV.");
+    }
+  };
+
   const handleLocalScoreChange = (id: string, newScore: SentimentScore) => {
     setPendingScores((prev) => ({
       ...prev,
@@ -161,7 +209,7 @@ const DashboardPage: React.FC = () => {
     const entries = Object.entries(pendingScores);
     if (!entries.length) return;
     if (!activeBatchId) {
-      alert('Upload CSV first to set file_id.');
+      alert("Upload CSV first to set file_id.");
       return;
     }
     setIsSavingScores(true);
@@ -179,7 +227,7 @@ const DashboardPage: React.FC = () => {
       );
       setPendingScores({});
     } catch (e) {
-      alert((e as any)?.message || 'Failed to save labels.');
+      alert((e as any)?.message || "Failed to save labels.");
     } finally {
       setIsSavingScores(false);
     }
@@ -236,11 +284,13 @@ const DashboardPage: React.FC = () => {
       <main className="dashboard__main">
         <CommentFeed
           isOpen={isCommentsOpen}
-          comments={comments}
+          comments={filteredComments}
           pendingScores={pendingScores}
           onLocalScoreChange={handleLocalScoreChange}
           onApplyChanges={handleApplyScores}
           isSaving={isSavingScores}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
 
         <div className="dashboard__charts-panel">
@@ -252,6 +302,12 @@ const DashboardPage: React.FC = () => {
                 {kpiStats.deltaPercent >= 0 ? "+" : ""}
                 {kpiStats.deltaPercent.toFixed(1)}% vs previous period
               </div>
+            </section>
+          )}
+          {reviewChart && (
+            <section className="kpi-card">
+              <div className="kpi-card__label">?????????</div>
+              <div className="kpi-card__value">{f1Display}</div>
             </section>
           )}
           <ChartGrid charts={charts} sentimentChart={sentimentChart} />
@@ -268,6 +324,19 @@ const DashboardPage: React.FC = () => {
         <button className="btn" onClick={handleDownload}>
           Download classified CSV
         </button>
+        <div className="upload-group">
+          <FileUploadButton
+            onUpload={handleUploadValidation}
+            disabled={!activeBatchId}
+            label="Upload validation CSV"
+          />
+          {validationMessage && (
+            <span className="upload-message">{validationMessage}</span>
+          )}
+          {f1Metric !== null && (
+            <span className="upload-message">F1 (macro): {f1Metric.toFixed(3)}</span>
+          )}
+        </div>
       </footer>
     </div>
   );
@@ -276,11 +345,13 @@ const DashboardPage: React.FC = () => {
 type FileUploadButtonProps = {
   onUpload: (file: File) => void;
   disabled?: boolean;
+  label?: string;
 };
 
 const FileUploadButton: React.FC<FileUploadButtonProps> = ({
   onUpload,
   disabled,
+  label,
 }) => {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -307,7 +378,7 @@ const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         onClick={handleClick}
         disabled={disabled}
       >
-        {disabled ? "Uploading..." : "Upload CSV"}
+        {label ? (disabled ? `${label} (disabled)` : label) : disabled ? "Uploading..." : "Upload CSV"}
       </button>
       <input
         ref={inputRef}

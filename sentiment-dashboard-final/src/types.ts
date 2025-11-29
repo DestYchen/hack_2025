@@ -77,3 +77,22 @@ export interface UpdateClassifiedResponse {
   status: "success" | "error";
   message: string;
 }
+
+export interface UploadLabelsResponse {
+  status: "success" | "error";
+  file_id?: string;
+  f1_metric?: number;
+  message?: string;
+}
+
+export interface BatchSummary {
+  id_batch: string;
+  time?: string | null;
+  f1_metric: number;
+}
+
+export interface BatchSummaryResponse {
+  status: "success" | "error";
+  summary?: BatchSummary;
+  message?: string;
+}

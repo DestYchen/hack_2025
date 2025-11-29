@@ -9,6 +9,8 @@ interface CommentFeedProps {
   onLocalScoreChange: (id: string, score: SentimentScore) => void;
   onApplyChanges: () => void;
   isSaving: boolean;
+  searchQuery: string;
+  onSearchChange: (value: string) => void;
 }
 
 export const CommentFeed: React.FC<CommentFeedProps> = ({
@@ -18,6 +20,8 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
   onLocalScoreChange,
   onApplyChanges,
   isSaving,
+  searchQuery,
+  onSearchChange,
 }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const hasPending = Object.keys(pendingScores).length > 0;
@@ -63,7 +67,7 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
                     {isExpanded
                       ? comment.text
                       : comment.text.length > 90
-                      ? comment.text.slice(0, 90) + "…"
+                      ? comment.text.slice(0, 90) + "..."
                       : comment.text}
                   </div>
                   {dateOnly && !isExpanded && (
@@ -120,10 +124,11 @@ export const CommentFeed: React.FC<CommentFeedProps> = ({
         >
           {isSaving ? "Saving..." : "Apply changes"}
         </button>
-        <textarea
+        <input
           className="comment-feed__input"
-          placeholder="Leave a note..."
-          rows={3}
+          placeholder="Найти комментарий"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
         />
       </div>
     </aside>
