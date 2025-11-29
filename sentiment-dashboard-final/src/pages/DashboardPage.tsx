@@ -242,12 +242,6 @@ const DashboardPage: React.FC = () => {
             Assign sentiment to comments: negative / neutral / positive
           </p>
         </div>
-        <button
-          className="btn btn--secondary"
-          onClick={() => setIsCommentsOpen((prev) => !prev)}
-        >
-          {isCommentsOpen ? "Hide comments" : "Show comments"}
-        </button>
       </header>
 
       <section className="dashboard__filters">
@@ -313,6 +307,15 @@ const DashboardPage: React.FC = () => {
           <ChartGrid charts={charts} sentimentChart={sentimentChart} />
         </div>
       </main>
+
+      <div className="comment-toggle-row">
+        <button
+          className="btn btn--secondary"
+          onClick={() => setIsCommentsOpen((prev) => !prev)}
+        >
+          {isCommentsOpen ? "Hide comments" : "Show comments"}
+        </button>
+      </div>
 
       <footer className="dashboard__footer">
         <div className="upload-group">

@@ -177,3 +177,5 @@
 .comment-feed__input::placeholder {
   color: var(--color-text-muted);
 }
+
+.comment-feed__toggle-btn-bottom{margin-top:0.5rem;align-self:flex-start;border:1px solid #999;padding:4px 10px;border-radius:6px;background:#111;color:#eee;cursor:pointer;}

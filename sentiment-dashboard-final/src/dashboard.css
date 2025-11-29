@@ -86,6 +86,14 @@
   transition: margin-left var(--transition-fast);
 }
 
+.comment-toggle-row {
+  display: flex;
+  justify-content: flex-start;
+  width: 320px;
+  max-width: 100%;
+  margin: 0 0 0.8rem;
+}
+
 .dashboard--with-sidebar .dashboard__charts-panel {
   margin-left: 340px;
 }
@@ -149,5 +157,10 @@
   .dashboard__footer {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .comment-toggle-row {
+    width: 100%;
+    margin-top: 0.4rem;
   }
 }
