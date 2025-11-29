@@ -96,3 +96,29 @@ export interface BatchSummaryResponse {
   summary?: BatchSummary;
   message?: string;
 }
+
+export interface BatchCountResponse {
+  status: "success" | "error";
+  file_id?: string;
+  total?: number;
+  message?: string;
+}
+
+export interface SentimentShareResponse {
+  status: "success" | "error";
+  file_id?: string;
+  share?: Record<string, number>;
+  message?: string;
+}
+
+export interface ReviewSeriesPoint {
+  date: string;
+  value: number;
+}
+
+export interface ReviewSeriesResponse {
+  status: "success" | "error";
+  file_id?: string;
+  series?: ReviewSeriesPoint[];
+  message?: string;
+}

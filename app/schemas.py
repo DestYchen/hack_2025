@@ -70,6 +70,29 @@ class BatchSummaryResponse(BaseModel):
     summary: BatchSummaryRead
 
 
+class BatchCountResponse(BaseModel):
+    status: Literal["success"]
+    file_id: str
+    total: int
+
+
+class SentimentShareResponse(BaseModel):
+    status: Literal["success"]
+    file_id: str
+    share: dict[str, int]
+
+
+class ReviewSeriesItem(BaseModel):
+    date: str
+    value: int
+
+
+class ReviewSeriesResponse(BaseModel):
+    status: Literal["success"]
+    file_id: str
+    series: list[ReviewSeriesItem]
+
+
 class ClassifiedRead(BaseModel):
     id_comment: int
     id_batch: UUID

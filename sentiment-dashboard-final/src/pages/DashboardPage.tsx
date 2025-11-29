@@ -14,9 +14,11 @@ import {
   patchCommentScore,
   uploadLabels,
   fetchBatchSummary,
+  fetchBatchCount,
 } from "../services/api";
 import { ChartGrid } from "../components/ChartGrid";
 import { CommentFeed } from "../components/CommentFeed";
+import { DateRangePicker } from "../components/DateRangePicker";
 import "../dashboard.css";
 
 const todayIso = new Date().toISOString().slice(0, 10);
@@ -29,11 +31,7 @@ const defaultFilter: DashboardFilter = {
   },
 };
 
-type KpiStats = {
-  total: number;
-  previousTotal: number;
-  deltaPercent: number;
-};
+const BATCH_STORAGE_KEY = "activeBatchId";
 
 const DashboardPage: React.FC = () => {
   const [filter, setFilter] = useState<DashboardFilter>(defaultFilter);
@@ -46,18 +44,42 @@ const DashboardPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [f1Metric, setF1Metric] = useState<number | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
-
-  const [pendingScores, setPendingScores] = useState<
-    Record<string, SentimentScore>
-  >({});
+  const [pendingScores, setPendingScores] = useState<Record<string, SentimentScore>>({});
   const [isSavingScores, setIsSavingScores] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [totalComments, setTotalComments] = useState(0);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(BATCH_STORAGE_KEY);
+    if (stored) {
+      setActiveBatchId(stored);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activeBatchId) {
+      setCharts([]);
+      return;
+    }
+    let cancelled = false;
     (async () => {
-      const data = await fetchDashboard(filter);
-      setCharts(data);
+      try {
+        const data = await fetchDashboard(activeBatchId, filter.granularity);
+        if (!cancelled) {
+          setCharts(data);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCharts([]);
+          setUploadMessage((e as any)?.message || "Failed to load dashboard data.");
+        }
+      }
     })();
-  }, [filter]);
+    return () => {
+      cancelled = true;
+    };
+  }, [filter.granularity, filter.dateRange.from, filter.dateRange.to, activeBatchId]);
 
   useEffect(() => {
     if (!activeBatchId) return;
@@ -65,8 +87,8 @@ const DashboardPage: React.FC = () => {
       try {
         const val = await fetchBatchSummary(activeBatchId);
         if (val !== null) setF1Metric(val);
-      } catch (e) {
-        /* ignore */
+      } catch {
+        // ignore summary errors
       }
     })();
   }, [activeBatchId]);
@@ -86,6 +108,43 @@ const DashboardPage: React.FC = () => {
         setComments(sorted);
       } catch (e: any) {
         setUploadMessage(e?.message || "Failed to load comments.");
+      }
+    })();
+  }, [activeBatchId]);
+
+  const clearStoredBatch = (message?: string) => {
+    if (message) {
+      setUploadMessage(message);
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(BATCH_STORAGE_KEY);
+    }
+    setActiveBatchId(null);
+    setCharts([]);
+    setComments([]);
+    setTotalComments(0);
+    setF1Metric(null);
+    setValidationMessage(null);
+    setPendingScores({});
+  };
+
+  useEffect(() => {
+    if (!activeBatchId) {
+      setTotalComments(0);
+      return;
+    }
+    (async () => {
+      try {
+        const total = await fetchBatchCount(activeBatchId);
+        setTotalComments(total);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(BATCH_STORAGE_KEY, activeBatchId);
+        }
+      } catch (e) {
+        setTotalComments(0);
+        clearStoredBatch(
+          (e as any)?.message || "Stored batch is unavailable. Please upload the CSV again."
+        );
       }
     })();
   }, [activeBatchId]);
@@ -110,35 +169,25 @@ const DashboardPage: React.FC = () => {
   }, [comments, searchQuery]);
 
   const f1Display = useMemo(() => {
-    if (f1Metric === null) return "??? ??????? F1";
+    if (f1Metric === null) return "No F1 metric";
     return `F1 (macro): ${f1Metric.toFixed(3)}`;
   }, [f1Metric]);
-
-  const kpiStats: KpiStats | null = useMemo(() => {
-    if (!reviewChart || !reviewChart.data.length) return null;
-    const total = reviewChart.data.reduce((acc, p) => acc + p.value, 0);
-    const previousTotalRaw = total * (0.7 + Math.random() * 0.4); // mock previous period value
-    const previousTotal = Math.max(1, Math.round(previousTotalRaw));
-    const deltaPercent = ((total - previousTotal) / previousTotal) * 100;
-    return {
-      total: Math.round(total),
-      previousTotal,
-      deltaPercent,
-    };
-  }, [reviewChart]);
 
   const handleGranularityChange = (g: Granularity) => {
     setFilter((prev) => ({ ...prev, granularity: g }));
   };
 
-  const handleDateChange = (part: "from" | "to", value: string) => {
+  const handleDateRangeChange = (range: { from: string; to: string }) => {
     setFilter((prev) => ({
       ...prev,
       dateRange: {
-        ...prev.dateRange,
-        [part]: value,
+        from: range.from,
+        to: range.to,
       },
     }));
+    if (range.from && range.to) {
+      setIsCalendarOpen(false);
+    }
   };
 
   const handleUpload = async (file: File) => {
@@ -158,6 +207,9 @@ const DashboardPage: React.FC = () => {
         throw new Error("file_id not returned by server.");
       }
       setActiveBatchId(batchId);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(BATCH_STORAGE_KEY, batchId);
+      }
       setUploadMessage(res.message || "File uploaded and processed.");
       setF1Metric(null);
       setValidationMessage(null);
@@ -242,15 +294,17 @@ const DashboardPage: React.FC = () => {
             Assign sentiment to comments: negative / neutral / positive
           </p>
         </div>
-        <button
-          className="btn btn--secondary"
-          onClick={() => setIsCommentsOpen((prev) => !prev)}
-        >
-          {isCommentsOpen ? "Hide comments" : "Show comments"}
-        </button>
       </header>
 
       <section className="dashboard__filters">
+        <div className="filter-group filter-group--actions">
+          <button
+            className="btn btn--secondary"
+            onClick={() => setIsCommentsOpen((prev) => !prev)}
+          >
+            {isCommentsOpen ? "Hide comments" : "Show comments"}
+          </button>
+        </div>
         <div className="filter-group">
           <span className="filter-label">Granularity:</span>
           {(["day", "week", "month"] as Granularity[]).map((g) => (
@@ -265,19 +319,26 @@ const DashboardPage: React.FC = () => {
             </button>
           ))}
         </div>
-        <div className="filter-group">
+        <div className="filter-group filter-group--wide">
           <span className="filter-label">Period:</span>
-          <input
-            type="date"
-            value={filter.dateRange.from}
-            onChange={(e) => handleDateChange("from", e.target.value)}
-          />
-          <span className="filter-separator">to</span>
-          <input
-            type="date"
-            value={filter.dateRange.to}
-            onChange={(e) => handleDateChange("to", e.target.value)}
-          />
+          <div className="date-range-trigger">
+            <button
+              className="btn btn--secondary"
+              onClick={() => setIsCalendarOpen((prev) => !prev)}
+            >
+              {filter.dateRange.from && filter.dateRange.to
+                ? `${filter.dateRange.from} -> ${filter.dateRange.to}`
+                : "Select range"}
+            </button>
+            {isCalendarOpen && (
+              <div className="date-range-popover">
+                <DateRangePicker value={filter.dateRange} onChange={handleDateRangeChange} />
+                <button className="chip" onClick={() => setIsCalendarOpen(false)}>
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -294,23 +355,26 @@ const DashboardPage: React.FC = () => {
         />
 
         <div className="dashboard__charts-panel">
-          {kpiStats && (
-            <section className="kpi-card">
-              <div className="kpi-card__label">Total comments</div>
-              <div className="kpi-card__value">{kpiStats.total}</div>
-              <div className="kpi-card__delta">
-                {kpiStats.deltaPercent >= 0 ? "+" : ""}
-                {kpiStats.deltaPercent.toFixed(1)}% vs previous period
-              </div>
-            </section>
-          )}
+          <section className="kpi-card">
+            <div className="kpi-card__label">Total comments</div>
+            <div className="kpi-card__value">{totalComments}</div>
+            <div className="kpi-card__delta">
+              {activeBatchId ? "Loaded from current batch" : "Upload CSV to start"}
+            </div>
+          </section>
           {reviewChart && (
             <section className="kpi-card">
-              <div className="kpi-card__label">?????????</div>
+              <div className="kpi-card__label">Validation F1</div>
               <div className="kpi-card__value">{f1Display}</div>
             </section>
           )}
-          <ChartGrid charts={charts} sentimentChart={sentimentChart} />
+          {activeBatchId ? (
+            <ChartGrid charts={charts} sentimentChart={sentimentChart} />
+          ) : (
+            <div className="chart-card chart-card--placeholder">
+              <p>Upload and process a CSV file to see sentiment distribution.</p>
+            </div>
+          )}
         </div>
       </main>
 

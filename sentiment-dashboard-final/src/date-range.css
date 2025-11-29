@@ -1,0 +1,132 @@
+.date-range {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  padding: 0.8rem;
+}
+
+.date-range__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.date-range__calendars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.8rem;
+}
+
+.calendar {
+  background: rgba(17, 24, 39, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 0.6rem;
+}
+
+.calendar__header {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  align-items: center;
+  margin-bottom: 0.3rem;
+  color: var(--color-text-primary);
+}
+
+.calendar__title {
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.calendar__nav {
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: var(--color-text-primary);
+  border-radius: 8px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+
+.calendar__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  margin-bottom: 0.2rem;
+  text-align: center;
+}
+
+.calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.2rem;
+}
+
+.day {
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background var(--transition-fast), border var(--transition-fast), color var(--transition-fast);
+}
+
+.day--empty {
+  border: none;
+  background: transparent;
+}
+
+.day:hover {
+  border-color: rgba(215, 255, 63, 0.5);
+}
+
+.day--selected {
+  background: rgba(215, 255, 63, 0.2);
+  border-color: rgba(215, 255, 63, 0.6);
+  color: #f9fafb;
+}
+
+.day--edge {
+  border-color: rgba(215, 255, 63, 0.9);
+}
+
+.date-range__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.date-range__selected {
+  display: flex;
+  gap: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.date-range-trigger {
+  position: relative;
+  display: inline-block;
+}
+
+.date-range-popover {
+  position: absolute;
+  top: 110%;
+  left: 0;
+  z-index: 5;
+  background: rgba(2, 6, 23, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(2, 6, 23, 0.8);
+  padding: 0.8rem;
+  min-width: 520px;
+}
+
+.filter-group--wide {
+  align-items: flex-start;
+}

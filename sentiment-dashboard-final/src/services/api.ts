@@ -1,6 +1,5 @@
 import {
   DashboardChart,
-  DashboardFilter,
   Comment,
   UploadResponse,
   SentimentScore,
@@ -9,66 +8,41 @@ import {
   UpdateClassifiedResponse,
   UploadLabelsResponse,
   BatchSummaryResponse,
+  BatchCountResponse,
+  SentimentShareResponse,
+  ReviewSeriesResponse,
+  Granularity,
 } from "../types";
 
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8000";
 
-// Mock charts remain for now; there is no backend source for them yet.
-export async function fetchDashboard(filter: DashboardFilter): Promise<DashboardChart[]> {
-  const from = new Date(filter.dateRange.from);
-  const to = new Date(filter.dateRange.to);
-
-  const points: DashboardChart["data"] = [];
-  const dayMs = 24 * 60 * 60 * 1000;
-  let stepMs = dayMs;
-  let format: (d: Date) => string = (d) => d.toISOString().slice(0, 10);
-
-  if (filter.granularity === "week") {
-    stepMs = 7 * dayMs;
-    format = (d) => {
-      const year = d.getUTCFullYear();
-      const oneJan = new Date(Date.UTC(year, 0, 1));
-      const week = Math.ceil(((+d - +oneJan) / dayMs + oneJan.getUTCDay() + 1) / 7);
-      return `${year}-W${String(week).padStart(2, "0")}`;
-    };
-  } else if (filter.granularity === "month") {
-    stepMs = 30 * dayMs;
-    format = (d) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-
-  for (let t = from.getTime(); t <= to.getTime(); t += stepMs) {
-    const d = new Date(t);
-    points.push({
-      date: format(d),
-      value: Math.round(20 + Math.random() * 80),
-    });
-  }
+export async function fetchDashboard(fileId: string, granularity: Granularity): Promise<DashboardChart[]> {
+  if (!fileId) return [];
+  const [series, share] = await Promise.all([
+    fetchReviewSeries(fileId, granularity),
+    fetchSentimentShare(fileId),
+  ]);
 
   const reviewChart: DashboardChart = {
     metric: "review_count",
     chartType: "line",
-    granularity: filter.granularity,
-    data: points,
+    granularity,
+    data: series.map((item) => ({ date: item.date, value: item.value })),
   };
 
-  const negative = 20 + Math.random() * 20;
-  const neutral = 20 + Math.random() * 30;
-  const positive = 100 - negative - neutral;
+  const shareData = ["negative", "neutral", "positive"].map((key) => ({
+    date: key,
+    value: share[key as keyof typeof share] ?? 0,
+  }));
 
   const sentimentPie: DashboardChart = {
     metric: "share_positive_reviews",
     chartType: "pie",
-    granularity: filter.granularity,
-    data: [
-      { date: "negative", value: Number(negative.toFixed(1)) },
-      { date: "neutral", value: Number(neutral.toFixed(1)) },
-      { date: "positive", value: Number(positive.toFixed(1)) },
-    ],
+    granularity,
+    data: shareData,
   };
 
-  return new Promise((resolve) => {
-    setTimeout(() => resolve([reviewChart, sentimentPie]), 400);
-  });
+  return [reviewChart, sentimentPie];
 }
 
 function typeToScore(type: number): SentimentScore {
@@ -194,4 +168,38 @@ export async function fetchBatchSummary(fileId: string): Promise<number | null> 
     throw new Error(data.message || "Failed to load batch summary.");
   }
   return typeof data.summary.f1_metric === "number" ? data.summary.f1_metric : null;
+}
+
+export async function fetchBatchCount(fileId: string): Promise<number> {
+  if (!fileId) throw new Error("file_id is required.");
+  const res = await fetch(`${API_BASE}/batch_count?file_id=${encodeURIComponent(fileId)}`);
+  const data = await handleJson<BatchCountResponse>(res);
+  if (data.status !== "success" || typeof data.total !== "number") {
+    throw new Error(data.message || "Failed to fetch batch count.");
+  }
+  return data.total;
+}
+
+export async function fetchSentimentShare(fileId: string): Promise<Record<string, number>> {
+  if (!fileId) throw new Error("file_id is required.");
+  const res = await fetch(`${API_BASE}/sentiment_share?file_id=${encodeURIComponent(fileId)}`);
+  const data = await handleJson<SentimentShareResponse>(res);
+  if (data.status !== "success" || !data.share) {
+    throw new Error(data.message || "Failed to fetch sentiment share.");
+  }
+  return data.share;
+}
+
+export async function fetchReviewSeries(
+  fileId: string,
+  granularity: Granularity
+): Promise<{ date: string; value: number }[]> {
+  if (!fileId) throw new Error("file_id is required.");
+  const url = `${API_BASE}/review_series?file_id=${encodeURIComponent(fileId)}&granularity=${granularity}`;
+  const res = await fetch(url);
+  const data = await handleJson<ReviewSeriesResponse>(res);
+  if (data.status !== "success" || !Array.isArray(data.series)) {
+    throw new Error(data.message || "Failed to fetch review time series.");
+  }
+  return data.series;
 }

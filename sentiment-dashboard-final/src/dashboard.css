@@ -38,6 +38,12 @@
   align-items: center;
   gap: 0.6rem;
 }
+.filter-group--actions {
+  margin-right: 1rem;
+}
+.filter-group--wide {
+  align-items: flex-start;
+}
 .filter-label {
   font-size: 0.85rem;
   color: var(--color-text-muted);
@@ -112,6 +118,16 @@
 .kpi-card__delta {
   font-size: 0.85rem;
   color: var(--color-accent-soft);
+}
+
+.chart-card--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  color: var(--color-text-muted);
+  text-align: center;
+  border: 1px dashed rgba(148, 163, 184, 0.4);
 }
 
 .dashboard__footer {

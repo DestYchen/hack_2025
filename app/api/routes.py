@@ -111,6 +111,41 @@ async def get_batch_summary(file_id: str, session: AsyncSession = Depends(get_se
     return {"status": "success", "summary": summary}
 
 
+@router.get("/batch_count", response_model=schemas.BatchCountResponse, responses={400: {"model": schemas.ErrorResponse}})
+async def get_batch_count(file_id: str, session: AsyncSession = Depends(get_session)):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    total = await records.count_batch_records(session, batch_uuid)
+    return {"status": "success", "file_id": str(batch_uuid), "total": total}
+
+
+@router.get("/sentiment_share", response_model=schemas.SentimentShareResponse, responses={400: {"model": schemas.ErrorResponse}})
+async def get_sentiment_share(file_id: str, session: AsyncSession = Depends(get_session)):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    share = await records.sentiment_share(session, batch_uuid)
+    return {"status": "success", "file_id": str(batch_uuid), "share": share}
+
+
+@router.get("/review_series", response_model=schemas.ReviewSeriesResponse, responses={400: {"model": schemas.ErrorResponse}})
+async def get_review_series(
+    file_id: str,
+    granularity: str = "day",
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    granularity = granularity if granularity in {"day", "week", "month"} else "day"
+    series = await records.review_timeseries(session, batch_uuid, granularity)
+    return {"status": "success", "file_id": str(batch_uuid), "series": series}
+
+
 @router.get(
     "/classified",
     response_model=schemas.ClassifiedListResponse,

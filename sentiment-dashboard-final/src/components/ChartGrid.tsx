@@ -24,10 +24,10 @@ const metricLabel: Record<string, string> = {
   share_positive_reviews: "Доля отзывов по тональности",
 };
 
-const pieColors: Record<string, string> = {
-  negative: "#ff4c5b",
-  neutral: "#9ca3af",
-  positive: "#4ade80",
+const pieGradients: Record<string, { from: string; to: string }> = {
+  negative: { from: "#ff4c5b", to: "#7f1d1d" },
+  neutral: { from: "#94a3b8", to: "#1f2937" },
+  positive: { from: "#4ade80", to: "#0f766e" },
 };
 
 interface ChartGridProps {
@@ -99,6 +99,14 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, sentimentChart }) 
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
                 <Tooltip />
+                <defs>
+                  {Object.entries(pieGradients).map(([key, colors]) => (
+                    <linearGradient key={key} id={`pie-${key}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stopColor={colors.from} stopOpacity={0.8} />
+                      <stop offset="100%" stopColor={colors.to} stopOpacity={0.9} />
+                    </linearGradient>
+                  ))}
+                </defs>
                 <Pie
                   data={donut.data}
                   dataKey="value"
@@ -110,7 +118,14 @@ export const ChartGrid: React.FC<ChartGridProps> = ({ charts, sentimentChart }) 
                   {donut.data.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={pieColors[entry.date] ?? "#4ade80"}
+                      stroke="none"
+                      fill={
+                        pieGradients[entry.date]
+                          ? `url(#pie-${entry.date})`
+                          : pieGradients.positive
+                          ? `url(#pie-positive)`
+                          : "#4ade80"
+                      }
                     />
                   ))}
                 </Pie>

@@ -47,3 +47,40 @@ async def delete_record(session: AsyncSession, record_id: int) -> bool:
     await session.delete(record)
     await session.commit()
     return True
+
+
+async def count_batch_records(session: AsyncSession, batch_id: uuid.UUID) -> int:
+    result = await session.execute(
+        select(func.count()).select_from(models.RawComment).where(models.RawComment.id_batch == batch_id)
+    )
+    return int(result.scalar() or 0)
+
+
+async def sentiment_share(session: AsyncSession, batch_id: uuid.UUID) -> dict[str, int]:
+    result = await session.execute(
+        select(models.ClassifiedComment.type_comment, func.count())
+        .where(models.ClassifiedComment.id_batch == batch_id)
+        .group_by(models.ClassifiedComment.type_comment)
+    )
+    counts = {row[0]: row[1] for row in result.all()}
+    mapping = {0: "negative", 1: "neutral", 2: "positive"}
+    return {mapping[k]: counts.get(k, 0) for k in mapping}
+
+
+async def review_timeseries(session: AsyncSession, batch_id: uuid.UUID, granularity: str) -> list[dict[str, str | int]]:
+    if granularity not in {"day", "week", "month"}:
+        granularity = "day"
+    bucket = func.date_trunc(granularity, models.RawComment.time).label("bucket")
+    result = await session.execute(
+        select(bucket, func.count())
+        .where(models.RawComment.id_batch == batch_id)
+        .group_by(bucket)
+        .order_by(bucket)
+    )
+    series = []
+    for ts, count in result.all():
+        if ts is None:
+            continue
+        date_value = ts.date().isoformat()
+        series.append({"date": date_value, "value": int(count)})
+    return series
