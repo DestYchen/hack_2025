@@ -1,8 +1,10 @@
 import csv
 import io
 import os
+import random
+import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import UploadFile
@@ -20,14 +22,25 @@ def _ensure_dirs() -> None:
     os.makedirs(settings.output_dir, exist_ok=True)
 
 
+def _random_time(months: int = 6) -> datetime:
+    """Return a random datetime between now and `months` months ago."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(days=30 * months)
+    total_seconds = int((now - window_start).total_seconds())
+    if total_seconds <= 0:
+        return now
+    offset = random.randint(0, total_seconds)
+    return window_start + timedelta(seconds=offset)
+
+
 def _parse_time(raw: Optional[str]) -> datetime:
-    if not raw:
-        return datetime.now(timezone.utc)
-    try:
-        parsed = datetime.fromisoformat(raw)
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return datetime.now(timezone.utc)
+    if raw:
+        try:
+            parsed = datetime.fromisoformat(raw)
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    return _random_time()
 
 
 def _normalize_row(row: dict[str, str | None]) -> dict[str, str | None]:
@@ -47,6 +60,23 @@ def _get_first(row: dict[str, str | None], keys: tuple[str, ...]) -> str | None:
     return None
 
 
+def _repair_csv_text(text: str) -> str:
+    """Merge rows where quoted fields were split across physical lines."""
+    lines = text.splitlines()
+    merged: list[str] = []
+    buffer: list[str] = []
+    def quote_count(chunks: list[str]) -> int:
+        return sum(chunk.count('"') for chunk in chunks)
+    for line in lines:
+        buffer.append(line)
+        if quote_count(buffer) % 2 == 0:
+            merged.append("\n".join(buffer))
+            buffer = []
+    if buffer:
+        merged.append("\n".join(buffer))
+    return "\n".join(merged)
+
+
 async def save_upload(file: UploadFile, session: AsyncSession) -> str:
     _ensure_dirs()
     payload = await file.read()
@@ -63,7 +93,8 @@ async def save_upload(file: UploadFile, session: AsyncSession) -> str:
     with open(path, "w", encoding="utf-8", newline="") as fp:
         fp.write(text)
 
-    reader = csv.DictReader(io.StringIO(text))
+    repaired_text = _repair_csv_text(text)
+    reader = csv.DictReader(io.StringIO(repaired_text))
     batch_uuid = uuid.uuid4()
     rows = []
     for row in reader:
@@ -74,8 +105,18 @@ async def save_upload(file: UploadFile, session: AsyncSession) -> str:
         raw_id = _get_first(nrow, ("id", "id_message", "idmessage", "id_comment", "idcomment"))
         if raw_id is None:
             raise ValueError("CSV must contain ID column for id_message.")
+        raw_id_clean = raw_id.strip()
+        if "," in raw_id_clean:
+            raw_id_clean = raw_id_clean.split(",", 1)[0]
+        raw_id_clean = raw_id_clean.strip('"').strip()
+        if not raw_id_clean:
+            # as a fallback, search for the first integer anywhere in the string
+            match = re.search(r"-?\d+", raw_id)
+            if not match:
+                raise ValueError(f"ID must be integer: {raw_id}")
+            raw_id_clean = match.group()
         try:
-            id_comment = int(raw_id)
+            id_comment = int(raw_id_clean)
         except ValueError as exc:
             raise ValueError(f"ID must be integer: {raw_id}") from exc
 

@@ -9,3 +9,5 @@ storage/outputs/
 # CSV datasets (large)
 *.csv
 ТОНАЛЬНОСТЬ/
+
+sentiment_model

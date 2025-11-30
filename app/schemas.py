@@ -93,6 +93,12 @@ class ReviewSeriesResponse(BaseModel):
     series: list[ReviewSeriesItem]
 
 
+class SentimentSeriesResponse(BaseModel):
+    status: Literal["success"]
+    file_id: str
+    series: dict[str, list[ReviewSeriesItem]]
+
+
 class ClassifiedRead(BaseModel):
     id_comment: int
     id_batch: UUID

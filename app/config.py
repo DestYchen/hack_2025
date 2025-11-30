@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     database_url: str = Field(default="postgresql+asyncpg://postgres:postgres@localhost:5432/app_db")
     upload_dir: str = Field(default="storage/uploads")
     output_dir: str = Field(default="storage/outputs")
+    model_api_url: str = Field(default="https://breathlessly-glowing-turnstone.cloudpub.ru")
 
     class Config:
         env_file = ".env"

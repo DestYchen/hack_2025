@@ -84,3 +84,29 @@ async def review_timeseries(session: AsyncSession, batch_id: uuid.UUID, granular
         date_value = ts.date().isoformat()
         series.append({"date": date_value, "value": int(count)})
     return series
+
+
+async def classified_sentiment_timeseries(
+    session: AsyncSession,
+    batch_id: uuid.UUID,
+    granularity: str,
+) -> dict[str, list[dict[str, str | int]]]:
+    if granularity not in {"day", "week", "month"}:
+        granularity = "day"
+    bucket = func.date_trunc(granularity, models.ClassifiedComment.time).label("bucket")
+    result = await session.execute(
+        select(bucket, models.ClassifiedComment.type_comment, func.count())
+        .where(models.ClassifiedComment.id_batch == batch_id)
+        .group_by(bucket, models.ClassifiedComment.type_comment)
+        .order_by(bucket)
+    )
+    mapping = {0: "negative", 1: "neutral", 2: "positive"}
+    series: dict[str, list[dict[str, str | int]]] = {name: [] for name in mapping.values()}
+    for ts, type_value, count in result.all():
+        if ts is None:
+            continue
+        label = mapping.get(type_value)
+        if not label:
+            continue
+        series[label].append({"date": ts.date().isoformat(), "value": int(count)})
+    return series

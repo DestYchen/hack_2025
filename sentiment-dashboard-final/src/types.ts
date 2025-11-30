@@ -2,6 +2,8 @@ export type SentimentScore = "positive" | "neutral" | "negative";
 
 export type MetricName =
   | "review_count"
+  | "negative_review_count"
+  | "positive_review_count"
   | "DAU"
   | "WAU"
   | "MAU"
@@ -120,5 +122,12 @@ export interface ReviewSeriesResponse {
   status: "success" | "error";
   file_id?: string;
   series?: ReviewSeriesPoint[];
+  message?: string;
+}
+
+export interface SentimentSeriesResponse {
+  status: "success" | "error";
+  file_id?: string;
+  series?: Record<string, ReviewSeriesPoint[]>;
   message?: string;
 }

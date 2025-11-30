@@ -11,6 +11,7 @@ import {
   BatchCountResponse,
   SentimentShareResponse,
   ReviewSeriesResponse,
+  SentimentSeriesResponse,
   Granularity,
 } from "../types";
 
@@ -18,31 +19,51 @@ const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "http://localhos
 
 export async function fetchDashboard(fileId: string, granularity: Granularity): Promise<DashboardChart[]> {
   if (!fileId) return [];
-  const [series, share] = await Promise.all([
+  const [series, share, sentimentSeries] = await Promise.all([
     fetchReviewSeries(fileId, granularity),
     fetchSentimentShare(fileId),
+    fetchSentimentSeries(fileId, granularity),
   ]);
 
-  const reviewChart: DashboardChart = {
-    metric: "review_count",
+  const charts: DashboardChart[] = [
+    {
+      metric: "review_count",
+      chartType: "line",
+      granularity,
+      data: series.map((item) => ({ date: item.date, value: item.value })),
+    },
+  ];
+
+  const negativeSeries = sentimentSeries.negative ?? [];
+  const positiveSeries = sentimentSeries.positive ?? [];
+
+  charts.push({
+    metric: "negative_review_count",
     chartType: "line",
     granularity,
-    data: series.map((item) => ({ date: item.date, value: item.value })),
-  };
+    data: negativeSeries.map((item) => ({ date: item.date, value: item.value })),
+  });
+
+  charts.push({
+    metric: "positive_review_count",
+    chartType: "line",
+    granularity,
+    data: positiveSeries.map((item) => ({ date: item.date, value: item.value })),
+  });
 
   const shareData = ["negative", "neutral", "positive"].map((key) => ({
     date: key,
     value: share[key as keyof typeof share] ?? 0,
   }));
 
-  const sentimentPie: DashboardChart = {
+  charts.push({
     metric: "share_positive_reviews",
     chartType: "pie",
     granularity,
     data: shareData,
-  };
+  });
 
-  return [reviewChart, sentimentPie];
+  return charts;
 }
 
 function typeToScore(type: number): SentimentScore {
@@ -200,6 +221,20 @@ export async function fetchReviewSeries(
   const data = await handleJson<ReviewSeriesResponse>(res);
   if (data.status !== "success" || !Array.isArray(data.series)) {
     throw new Error(data.message || "Failed to fetch review time series.");
+  }
+  return data.series;
+}
+
+export async function fetchSentimentSeries(
+  fileId: string,
+  granularity: Granularity
+): Promise<Record<string, { date: string; value: number }[]>> {
+  if (!fileId) throw new Error("file_id is required.");
+  const url = `${API_BASE}/sentiment_series?file_id=${encodeURIComponent(fileId)}&granularity=${granularity}`;
+  const res = await fetch(url);
+  const data = await handleJson<SentimentSeriesResponse>(res);
+  if (data.status !== "success" || !data.series) {
+    throw new Error(data.message || "Failed to fetch sentiment time series.");
   }
   return data.series;
 }

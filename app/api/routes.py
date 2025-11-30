@@ -131,6 +131,21 @@ async def get_sentiment_share(file_id: str, session: AsyncSession = Depends(get_
     return {"status": "success", "file_id": str(batch_uuid), "share": share}
 
 
+@router.get("/sentiment_series", response_model=schemas.SentimentSeriesResponse, responses={400: {"model": schemas.ErrorResponse}})
+async def get_sentiment_series(
+    file_id: str,
+    granularity: str = "day",
+    session: AsyncSession = Depends(get_session),
+):
+    try:
+        batch_uuid = uuid.UUID(file_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid file_id.")
+    granularity = granularity if granularity in {"day", "week", "month"} else "day"
+    series = await records.classified_sentiment_timeseries(session, batch_uuid, granularity)
+    return {"status": "success", "file_id": str(batch_uuid), "series": series}
+
+
 @router.get("/review_series", response_model=schemas.ReviewSeriesResponse, responses={400: {"model": schemas.ErrorResponse}})
 async def get_review_series(
     file_id: str,

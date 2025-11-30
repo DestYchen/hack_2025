@@ -149,11 +149,6 @@ const DashboardPage: React.FC = () => {
     })();
   }, [activeBatchId]);
 
-  const reviewChart = useMemo(
-    () => charts.find((c) => c.metric === "review_count"),
-    [charts]
-  );
-
   const sentimentChart = useMemo(
     () =>
       charts.find(
@@ -289,9 +284,9 @@ const DashboardPage: React.FC = () => {
     <div className={`dashboard ${isCommentsOpen ? "dashboard--with-sidebar" : ""}`}>
       <header className="dashboard__header">
         <div>
-          <h1 className="dashboard__title">Sentiment Dashboard</h1>
+          <h1 className="dashboard__title">Дэшборд тональности</h1>
           <p className="dashboard__subtitle">
-            Assign sentiment to comments: negative / neutral / positive
+            Применение оценки тональности к комменатариям: негативные / нейтральные / позитивные
           </p>
         </div>
       </header>
@@ -320,7 +315,7 @@ const DashboardPage: React.FC = () => {
           ))}
         </div>
         <div className="filter-group filter-group--wide">
-          <span className="filter-label">Period:</span>
+          <span className="filter-label">Период:</span>
           <div className="date-range-trigger">
             <button
               className="btn btn--secondary"
@@ -356,15 +351,15 @@ const DashboardPage: React.FC = () => {
 
         <div className="dashboard__charts-panel">
           <section className="kpi-card">
-            <div className="kpi-card__label">Total comments</div>
+            <div className="kpi-card__label">Всего комменатриев</div>
             <div className="kpi-card__value">{totalComments}</div>
             <div className="kpi-card__delta">
               {activeBatchId ? "Loaded from current batch" : "Upload CSV to start"}
             </div>
           </section>
-          {reviewChart && (
+          {activeBatchId && (
             <section className="kpi-card">
-              <div className="kpi-card__label">Validation F1</div>
+              <div className="kpi-card__label">Валидационная F1</div>
               <div className="kpi-card__value">{f1Display}</div>
             </section>
           )}
@@ -392,7 +387,7 @@ const DashboardPage: React.FC = () => {
           <FileUploadButton
             onUpload={handleUploadValidation}
             disabled={!activeBatchId}
-            label="Upload validation CSV"
+            label="Загрузить классифицированный CSV"
           />
           {validationMessage && (
             <span className="upload-message">{validationMessage}</span>
